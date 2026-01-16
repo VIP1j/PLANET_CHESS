@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Planet_Chess | Official</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-database-compat.js"></script>
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+
+    <style>
+        :root { --accent: #00d4ff; --neon: #39ff14; --bg: #0b0b14; }
+        body { background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; text-align: center; overflow-x: hidden; }
+        .screen { display: none; width: 100%; max-width: 480px; padding: 20px; margin: auto; flex-direction: column; box-sizing: border-box; min-height: 100vh; }
+        .active { display: flex; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        #board-resizer { position: relative; width: 100%; }
+        #board { width: 100%; border: 4px solid var(--accent); border-radius: 8px; box-shadow: 0 0 20px rgba(0,212,255,0.3); }
+        
+        /* Стиль повідомлення поверх дошки */
+        #draw-overlay { 
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0, 0, 0, 0.85); z-index: 100; border-radius: 8px;
+            flex-direction: column; justify-content: center; align-items: center;
+        }
+
+        .btn { background: rgba(255,255,255,0.05); border: 1px solid var(--accent); color: white; padding: 14px; margin: 6px 0; border-radius: 12px; cursor: pointer; font-weight: bold; transition: 0.2s; border: 1px solid var(--accent); }
+        .btn:hover { background: var(--accent); color: #000; }
+        
+        .timer-box { display: flex; justify-content: space-between; padding: 10px; background: #161625; border-radius: 10px; margin-bottom: 10px; color: var(--neon); font-family: monospace; font-size: 22px; border: 1px solid #333; }
+        .stats-box { background: rgba(255,255,255,0.08); padding: 15px; border-radius: 18px; border-left: 5px solid var(--neon); text-align: left; margin-bottom: 15px; }
+        input, select { width: 100%; padding: 12px; margin: 5px 0; border-radius: 10px; background: #000; color: #fff; border: 1px solid #444; box-sizing: border-box; }
+        .list-box { background: #161625; border-radius: 12px; padding: 10px; text-align: left; max-height: 250px; overflow-y: auto; margin-top: 10px; border: 1px solid #333; }
+        .item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #222; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+    <div id="loading-screen" class="screen active"><h2>🪐 ПЛАНЕТА ЗАВАНТАЖУЄТЬСЯ...</h2></div>
+
+    <div id="auth-screen" class="screen">
+        <h1 style="color:var(--accent)">Planet_Chess</h1>
+        <input type="email" id="email" placeholder="Email">
+        <input type="password" id="pass" placeholder="Пароль">
+        <button class="btn" onclick="authAction('login')">УВІЙТИ</button>
+        <button class="btn" onclick="authAction('reg')">РЕЄСТРАЦІЯ</button>
+    </div>
+
+    <div id="menu-screen" class="screen">
+        <div class="stats-box">
+            <b id="u-name" style="font-size: 20px;">Гравець</b><br>
+            <small>🌐 PvP: <b id="r-pvp" style="color:var(--accent)">100</b> | 🤖 Bot: <b id="r-bot" style="color:var(--neon)">100</b></small>
+        </div>
+        <select id="time-limit">
+            <option value="60">1 хв (Bullet)</option>
+            <option value="180" selected>3 хв (Blitz)</option>
+            <option value="600">10 хв (Rapid)</option>
+        </select>
+        <button class="btn" onclick="startSearch()">🌐 ГРАТИ (PVP)</button>
+        <button class="btn" onclick="$('.friend-box').toggle()">🤝 ГРАТИ З ДРУГОМ</button>
+        <div class="friend-box" style="display:none; background: #111; padding: 10px; border-radius: 12px; margin-bottom: 10px;">
+            <button class="btn" onclick="friendRoom('create')">Створити код</button>
+            <input type="text" id="join-id" placeholder="Введіть код">
+            <button class="btn" onclick="friendRoom('join')">Увійти</button>
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:5px;">
+            <button class="btn" onclick="startBot(1, 'Марик')">Марик</button>
+            <button class="btn" onclick="startBot(10, 'Кукузяба')">Кукузяба</button>
+            <button class="btn" onclick="startBot(20, 'Шоня')">Шоня</button>
+        </div>
+        <button class="btn" onclick="showLB()">🏆 ЛІДЕРИ</button>
+        <button class="btn" onclick="showScreen('profile-screen')">👤 АРХІВ / ПРОФІЛЬ</button>
+    </div>
+
+    <div id="game-screen" class="screen">
+        <div class="timer-box"><span id="opp-nick">Пошук...</span><span id="opp-time">--:--</span></div>
+        
+        <div id="board-resizer">
+            <div id="board"></div>
+            <div id="draw-overlay">
+                <h3 style="color:var(--accent); margin-bottom:20px;">СОПЕРНИК ПРЕДЛОЖИЛ НИЧЬЮ</h3>
+                <div style="display:flex; gap:20px;">
+                    <button class="btn" onclick="acceptDraw()" style="font-size:30px; padding:10px 30px; border-color:var(--neon);">✅</button>
+                    <button class="btn" onclick="declineDraw()" style="font-size:30px; padding:10px 30px; border-color:#ff4444;">❌</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="timer-box" style="margin-top:10px; border: 1px solid var(--accent);"><span id="my-nick">Ви</span><span id="my-time">--:--</span></div>
+        <div id="room-display"></div>
+        <div id="game-controls"></div>
+    </div>
+
+    <div id="profile-screen" class="screen">
+        <h3>👤 Налаштування профілю</h3>
+        <input type="text" id="new-nick" placeholder="Новий нік">
+        <button class="btn" onclick="updateNick()">ЗМІНИТИ НІК (1 раз на місяць)</button>
+        <hr style="width:100%; border: 0.5px solid #333; margin: 20px 0;">
+        <h3>📜 Архів ігор</h3>
+        <div id="archive-list" class="list-box"></div>
+        <button class="btn" onclick="showScreen('menu-screen')" style="margin-top:15px;">НАЗАД</button>
+    </div>
+
+    <script>
+        const firebaseConfig = { 
+            apiKey: "AIzaSyAmkBLeoloxgLRGzClkQ21HQ2GEahFQxKM",
+            databaseURL: "https://hrrthrth-default-rtdb.firebaseio.com",
+            projectId: "hrrthrth",
+            appId: "1:4650088854:web:15855662c2259e531dc5b7"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database(), auth = firebase.auth();
+
+        let game = new Chess(), board = null, userData = {};
+        let myColor = 'w', roomId = null, isPvP = false, gameActive = false;
+        let mySec, oppSec, timerInterval = null;
+
+        function authAction(t) {
+            const e = $('#email').val(), p = $('#pass').val();
+            if(t==='reg') {
+                auth.createUserWithEmailAndPassword(e,p).then(u => {
+                    db.ref('users/'+u.user.uid).set({nick: e.split('@')[0], rPvP: 100, rBot: 100, lastNickChange: 0});
+                }).catch(err => alert(err.message));
+            } else auth.signInWithEmailAndPassword(e,p).catch(err => alert(err.message));
+        }
+
+        auth.onAuthStateChanged(user => {
+            if(user) {
+                db.ref('users/'+user.uid).on('value', s => {
+                    userData = s.val() || {};
+                    $('#u-name, #my-nick').text(userData.nick);
+                    $('#r-pvp').text(userData.rPvP); $('#r-bot').text(userData.rBot);
+                    showScreen('menu-screen'); loadHistory();
+                });
+            } else showScreen('auth-screen');
+        });
+
+        async function updateNick() {
+            let n = $('#new-nick').val().trim();
+            if(!n || n.length < 3) return alert("Нік надто короткий!");
+            let now = Date.now();
+            if(userData.lastNickChange && (now - userData.lastNickChange < 2592000000)) {
+                let days = Math.ceil((2592000000 - (now - userData.lastNickChange)) / 86400000);
+                return alert("Змінити можна через " + days + " днів!");
+            }
+            db.ref('users/'+auth.currentUser.uid).update({nick: n, lastNickChange: now});
+            alert("Нік змінено!");
+        }
+
+        function friendRoom(mode) {
+            isPvP = true; gameActive = false; showScreen('game-screen'); setButtons(false);
+            if(mode === 'create') {
+                roomId = Math.floor(1000 + Math.random() * 9000).toString();
+                myColor = 'w';
+                db.ref('rooms/'+roomId).set({p1:auth.currentUser.uid, p1N:userData.nick, p1R:userData.rPvP, fen:'start', status:'wait', time:$('#time-limit').val()});
+                $('#room-display').text("Код: " + roomId);
+            } else {
+                roomId = $('#join-id').val();
+                myColor = 'b';
+                db.ref('rooms/'+roomId).update({p2:auth.currentUser.uid, p2N:userData.nick, p2R:userData.rPvP, status:'play'});
+            }
+            initBoard();
+        }
+
+        function startSearch() {
+            isPvP = true; gameActive = false; showScreen('game-screen'); setButtons(false);
+            db.ref('queue').transaction(q => q ? null : auth.currentUser.uid, (err, comm, s) => {
+                roomId = s.val() || auth.currentUser.uid;
+                myColor = s.val() ? 'b' : 'w';
+                if(myColor === 'w') db.ref('rooms/'+roomId).set({p1:auth.currentUser.uid, p1N:userData.nick, p1R:userData.rPvP, fen:'start', status:'wait', time:$('#time-limit').val()});
+                else db.ref('rooms/'+roomId).update({p2:auth.currentUser.uid, p2N:userData.nick, p2R:userData.rPvP, status:'play'});
+                initBoard();
+            });
+        }
+
+        function initBoard() {
+            board = Chessboard('board', {
+                draggable: true, position: 'start', orientation: myColor === 'w' ? 'white' : 'black',
+                pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+                onDrop: (s, t) => {
+                    if(!gameActive || game.turn() !== myColor[0]) return 'snapback';
+                    let m = game.move({from:s, to:t, promotion:'q'});
+                    if(!m) return 'snapback';
+                    if(isPvP) db.ref('rooms/'+roomId).update({fen: game.fen()});
+                    else { if(game.game_over()) handleEnd(); else setTimeout(makeBotMove, 500); }
+                }
+            });
+
+            if(isPvP) db.ref('rooms/'+roomId).on('value', s => {
+                let d = s.val(); if(!d) return;
+                
+                if(d.status === 'play' && !gameActive) {
+                    gameActive = true; setButtons(true);
+                    mySec = d.time; oppSec = d.time; startT();
+                }
+
+                // Відображення пропозиції нічиї ПОВЕРХ ДОШКИ
+                if(d.drawOffer && d.drawOffer !== auth.currentUser.uid && d.status === 'play') {
+                    $('#draw-overlay').css('display', 'flex');
+                } else {
+                    $('#draw-overlay').hide();
+                }
+
+                if(d.status === 'draw') handleEnd(true);
+                if(myColor==='w' && d.p2N) $('#opp-nick').text(d.p2N);
+                if(myColor==='b') $('#opp-nick').text(d.p1N);
+                if(d.fen !== game.fen()) {
+                    game.load(d.fen); board.position(d.fen);
+                    if(game.game_over()) handleEnd();
+                }
+            });
+        }
+
+        function acceptDraw() { db.ref('rooms/'+roomId).update({status:'draw'}); }
+        function declineDraw() { db.ref('rooms/'+roomId).update({drawOffer: null}); }
+
+        function startT() {
+            if(!isPvP || timerInterval) return;
+            timerInterval = setInterval(() => {
+                if(game.turn() === myColor[0]) { mySec--; if(mySec<=0) handleEnd(false, false); }
+                else { oppSec--; if(oppSec<=0) handleEnd(false, true); }
+                $('#my-time').text(fmt(mySec)); $('#opp-time').text(fmt(oppSec));
+            }, 1000);
+        }
+
+        function setButtons(active) {
+            if(!active) {
+                $('#game-controls').html(`<button class="btn" onclick="location.reload()" style="width:100%">🔙 Назад</button>`);
+            } else {
+                db.ref('rooms/'+roomId).once('value', s => {
+                    let d = s.val();
+                    if(d.drawOffer === auth.currentUser.uid) {
+                        $('#game-controls').html(`<p style="color:var(--accent); font-size:14px; margin:15px 0;">Очікуємо відповіді на нічию...</p>`);
+                    } else {
+                        $('#game-controls').html(`
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                                <button class="btn" onclick="offerDraw()">🤝 Нічия</button>
+                                <button class="btn" onclick="confirmResign()" style="color:#ff4444;">🏳️ Здатися</button>
+                            </div>
+                        `);
+                    }
+                });
+            }
+        }
+
+        function offerDraw() { 
+            if(isPvP) {
+                db.ref('rooms/'+roomId).update({drawOffer: auth.currentUser.uid});
+                setButtons(true);
+            }
+        }
+        function confirmResign() { if(confirm("Здатися?")) handleEnd(false, false); }
+
+        function handleEnd(draw = false, forceWin = null) {
+            clearInterval(timerInterval);
+            let win = forceWin !== null ? forceWin : (!draw && game.in_checkmate() && game.turn() !== myColor[0]);
+            let rKey = isPvP ? 'rPvP' : 'rBot';
+            let change = draw ? 0 : (win ? 5 : -6);
+            db.ref('users/'+auth.currentUser.uid).update({ [rKey]: Math.max(0, (userData[rKey]||100) + change) });
+            db.ref('users/'+auth.currentUser.uid+'/archive').push({
+                res: draw ? "Нічия" : (win ? "Перемога" : "Поразка"),
+                opp: $('#opp-nick').text(), date: new Date().toLocaleDateString()
+            });
+            alert(draw ? "НІЧИЯ" : (win ? "ПЕРЕМОГА!" : "ПОРАЗКА!"));
+            location.reload();
+        }
+
+        function startBot(lvl, n) {
+            isPvP = false; gameActive = true; game = new Chess(); showScreen('game-screen');
+            $('#opp-nick').text(n); $('#opp-time, #my-time').text("∞");
+            $('#game-controls').html(`<button class="btn" onclick="location.reload()" style="width:100%">🔙 Вихід</button>`);
+            initBoard();
+        }
+
+        function makeBotMove() {
+            let moves = game.moves();
+            if(moves.length) {
+                game.move(moves[Math.floor(Math.random() * moves.length)]);
+                board.position(game.fen());
+                if(game.game_over()) handleEnd();
+            }
+        }
+
+        function fmt(s) { return Math.floor(s/60).toString().padStart(2,'0')+":"+(s%60).toString().padStart(2,'0'); }
+        function showScreen(id) { $('.screen').removeClass('active'); $('#'+id).addClass('active'); }
+        
+        function showLB() {
+            db.ref('users').once('value', s => {
+                let users = Object.values(s.val() || {});
+                let pvpList = [...users].sort((a,b)=>b.rPvP-a.rPvP).slice(0,5).map(u=>`${u.nick}: ${u.rPvP}`).join('\n');
+                let botList = [...users].sort((a,b)=>b.rBot-a.rBot).slice(0,5).map(u=>`${u.nick}: ${u.rBot}`).join('\n');
+                alert("🏆 ТОП PvP:\n"+(pvpList||"Порожньо")+"\n\n🤖 ТОП БОТИ:\n"+(botList||"Порожньо"));
+            });
+        }
+
+        function loadHistory() {
+            db.ref('users/'+auth.currentUser.uid+'/archive').limitToLast(10).once('value', s => {
+                let h = ""; s.forEach(c => {
+                    let d = c.val();
+                    h = `<div class="item"><span>${d.date} - ${d.opp}</span> <b style="color:${d.res==='Перемога'?'#39ff14':(d.res==='Нічия'?'#fff':'#ff4444')}">${d.res}</b></div>` + h;
+                });
+                $('#archive-list').html(h || "Ігор немає");
+            });
+        }
+    </script>
+</body>
+</html>
