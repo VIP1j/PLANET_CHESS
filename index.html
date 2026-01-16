@@ -32,13 +32,11 @@
 </head>
 <body>
 
-    <div id="loading-screen" class="screen active"><h2>🪐 PLANET CHESS...</h2></div>
-
     <div id="auth-screen" class="screen">
-        <h1 style="color:var(--accent)">Вхід / Реєстрація</h1>
-        <p style="font-size: 12px; color: #888;">Введіть будь-яку пошту та пароль (мін. 6 знаків)</p>
-        <input type="email" id="email" placeholder="Email (напр. test@test.com)">
-        <input type="password" id="pass" placeholder="Пароль">
+        <h1 style="color:var(--accent)">Planet_Chess</h1>
+        <p style="font-size: 12px; color: #888;">Вхід або Створення акаунта</p>
+        <input type="email" id="email" placeholder="Email (напр. user@mail.com)">
+        <input type="password" id="pass" placeholder="Пароль (6+ знаків)">
         <button class="btn" onclick="authAction('login')">УВІЙТИ</button>
         <button class="btn" onclick="authAction('reg')" style="border-color: var(--neon)">РЕЄСТРАЦІЯ</button>
     </div>
@@ -85,7 +83,7 @@
     </div>
 
     <div id="profile-screen" class="screen">
-        <h3>Налаштування</h3>
+        <h3>Профіль</h3>
         <input type="text" id="new-nick" placeholder="Новий нік">
         <button class="btn" onclick="updateNick()">ЗМІНИТИ НІК</button>
         <button class="btn" onclick="showScreen('menu-screen')" style="margin-top:10px;">НАЗАД</button>
@@ -104,33 +102,20 @@
 
         let game = new Chess(), board = null, userData = {}, myColor = 'w', roomId = null, isPvP = false, gameActive = false, mySec, oppSec, timerInterval = null, pendingMove = null;
 
-        // ЛОГІКА ВХОДУ / РЕЄСТРАЦІЇ
         function authAction(type) {
-            const email = $('#email').val();
-            const pass = $('#pass').val();
-            if(!email || !pass) return alert("Заповніть поля!");
-
+            const email = $('#email').val(), pass = $('#pass').val();
+            if(!email || !pass) return alert("Заповніть пошта/пароль!");
             if(type === 'reg') {
                 auth.createUserWithEmailAndPassword(email, pass)
-                    .then(u => {
-                        db.ref('users/' + u.user.uid).set({
-                            nick: email.split('@')[0],
-                            rPvP: 100,
-                            rBot: 100
-                        });
-                        alert("Акаунт створено!");
-                    })
-                    .catch(e => alert("Помилка: " + e.message));
+                    .then(u => db.ref('users/'+u.user.uid).set({nick: email.split('@')[0], rPvP: 100, rBot: 100}))
+                    .catch(e => alert(e.message));
             } else {
-                auth.signInWithEmailAndPassword(email, pass)
-                    .catch(e => alert("Помилка: " + e.message));
+                auth.signInWithEmailAndPassword(email, pass).catch(e => alert(e.message));
             }
         }
 
-        // ПЕРЕВІРКА СТАНУ АВТОРИЗАЦІЇ
         auth.onAuthStateChanged(user => {
             if (user) {
-                // Користувач увійшов
                 db.ref('users/' + user.uid).on('value', s => {
                     userData = s.val() || {};
                     $('#u-name, #my-nick').text(userData.nick || "Гравець");
@@ -139,23 +124,16 @@
                     showScreen('menu-screen');
                 });
             } else {
-                // Користувач не увійшов
                 showScreen('auth-screen');
             }
         });
 
-        function showScreen(id) {
-            $('.screen').removeClass('active');
-            $('#' + id).addClass('active');
-        }
-
-        // --- РЕШТА ТВОЄЇ ЛОГІКИ ГРИ (PvP, Бот, Дошка) ---
+        function showScreen(id) { $('.screen').removeClass('active'); $('#' + id).addClass('active'); }
 
         function startSearch() {
             isPvP = true; gameActive = false; showScreen('game-screen'); setButtons(false);
             const tLim = $('#time-limit').val();
             const qPath = 'queue_' + tLim;
-
             db.ref(qPath).transaction(q => (q === auth.currentUser.uid) ? q : (q ? null : auth.currentUser.uid), (err, comm, s) => {
                 let res = s.val();
                 if (res === auth.currentUser.uid) {
@@ -179,28 +157,24 @@
                     let test = game.move({from: s, to: t, promotion: 'q'});
                     if (!test) return 'snapback';
                     game.undo();
-                    let p = game.get(s);
-                    if (p && p.type === 'p' && ((p.color === 'w' && t[1] === '8') || (p.color === 'b' && t[1] === '1'))) {
+                    if (game.get(s).type === 'p' && (t[1]==='8'||t[1]==='1')) {
                         pendingMove = { from: s, to: t }; $('#promotion-menu').show(); return;
                     }
                     game.move({from: s, to: t, promotion: 'q'}); updateAfterMove();
                 }
             });
-
-            if(isPvP) {
-                db.ref('rooms/'+roomId).on('value', s => {
-                    let d = s.val(); if(!d) return;
-                    if(d.status === 'finish') { db.ref('rooms/'+roomId).off(); alert(d.msg); location.reload(); return; }
-                    if(d.status === 'play' && !gameActive) { gameActive = true; setButtons(true); mySec = d.time; oppSec = d.time; startT(); }
-                    if(d.status === 'resigned') handleEnd(false, d.winner !== auth.currentUser.uid ? false : true, "СУПЕРНИК ЗДАВСЯ");
-                    if(myColor==='w' && d.p2N) $('#opp-nick').text(d.p2N);
-                    if(myColor==='b') $('#opp-nick').text(d.p1N);
-                    if(d.fen !== game.fen()) { game.load(d.fen); board.position(d.fen); if(game.game_over()) handleEnd(); }
-                });
-            }
+            if(isPvP) db.ref('rooms/'+roomId).on('value', s => {
+                let d = s.val(); if(!d) return;
+                if(d.status === 'finish') { db.ref('rooms/'+roomId).off(); alert(d.msg); location.reload(); return; }
+                if(d.status === 'play' && !gameActive) { gameActive = true; setButtons(true); mySec = d.time; oppSec = d.time; startT(); }
+                if(d.status === 'resigned') handleEnd(false, d.winner !== auth.currentUser.uid ? false : true, "СУПЕРНИК ЗДАВСЯ");
+                if(myColor==='w' && d.p2N) $('#opp-nick').text(d.p2N);
+                if(myColor==='b') $('#opp-nick').text(d.p1N);
+                if(d.fen !== game.fen()) { game.load(d.fen); board.position(d.fen); if(game.game_over()) handleEnd(); }
+            });
         }
 
-        function promoteTo(type) { $('#promotion-menu').hide(); if (pendingMove) { game.move({ from: pendingMove.from, to: pendingMove.to, promotion: type }); pendingMove = null; updateAfterMove(); } }
+        function promoteTo(type) { $('#promotion-menu').hide(); game.move({ from: pendingMove.from, to: pendingMove.to, promotion: type }); updateAfterMove(); }
         function updateAfterMove() {
             board.position(game.fen());
             if(isPvP) db.ref('rooms/'+roomId).update({fen: game.fen()});
