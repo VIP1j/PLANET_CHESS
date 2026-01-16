@@ -17,38 +17,30 @@
         :root { --accent: #00d4ff; --neon: #39ff14; --bg: #0b0b14; }
         * { touch-action: manipulation; box-sizing: border-box; }
         body { background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; text-align: center; overflow: hidden; height: 100vh; display: flex; align-items: center; justify-content: center; }
-        
         .screen { display: none; width: 100%; max-width: 420px; padding: 15px; height: 100%; flex-direction: column; justify-content: center; overflow-y: auto; }
         .active { display: flex; animation: fadeIn 0.3s; }
-        
-        #board-wrapper { position: relative; width: 100%; max-width: 400px; margin: auto; }
-        #board { width: 100%; border: 3px solid var(--accent); border-radius: 5px; box-shadow: 0 0 15px rgba(0,212,255,0.2); }
-        
-        #promotion-menu { 
-            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.95); border: 2px solid var(--neon); padding: 15px; border-radius: 12px; z-index: 1000;
-        }
-        .prom-btn { background: #222; border: 1px solid var(--accent); color: white; padding: 15px; margin: 5px; cursor: pointer; border-radius: 8px; font-size: 24px; transition: 0.2s; }
-        .prom-btn:hover { background: var(--accent); color: black; }
-
+        #board-wrapper { position: relative; width: 100%; margin: auto; }
+        #board { width: 100%; border: 3px solid var(--accent); border-radius: 5px; }
+        #promotion-menu { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.95); border: 2px solid var(--neon); padding: 15px; border-radius: 12px; z-index: 1000; }
+        .prom-btn { background: #222; border: 1px solid var(--accent); color: white; padding: 15px; margin: 5px; cursor: pointer; border-radius: 8px; font-size: 24px; }
         .btn { background: rgba(255,255,255,0.05); border: 1px solid var(--accent); color: white; padding: 12px; margin: 5px 0; border-radius: 10px; cursor: pointer; font-weight: bold; width: 100%; font-size: 14px; text-transform: uppercase; }
         .timer-box { display: flex; justify-content: space-between; padding: 8px 12px; background: #161625; border-radius: 8px; margin: 5px 0; color: var(--neon); font-family: monospace; font-size: 18px; border: 1px solid #333; }
         .stats-box { background: rgba(255,255,255,0.08); padding: 12px; border-radius: 15px; border-left: 4px solid var(--neon); text-align: left; margin-bottom: 10px; }
         input, select { width: 100%; padding: 10px; margin: 5px 0; border-radius: 8px; background: #000; color: #fff; border: 1px solid #444; }
-        .list-box { background: #161625; border-radius: 10px; padding: 8px; max-height: 150px; overflow-y: auto; border: 1px solid #333; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
 
-    <div id="loading-screen" class="screen active"><h2>🪐 ЗАВАНТАЖЕННЯ...</h2></div>
+    <div id="loading-screen" class="screen active"><h2>🪐 PLANET CHESS...</h2></div>
 
     <div id="auth-screen" class="screen">
-        <h1 style="color:var(--accent)">Planet_Chess</h1>
-        <input type="email" id="email" placeholder="Email">
+        <h1 style="color:var(--accent)">Вхід / Реєстрація</h1>
+        <p style="font-size: 12px; color: #888;">Введіть будь-яку пошту та пароль (мін. 6 знаків)</p>
+        <input type="email" id="email" placeholder="Email (напр. test@test.com)">
         <input type="password" id="pass" placeholder="Пароль">
         <button class="btn" onclick="authAction('login')">УВІЙТИ</button>
-        <button class="btn" onclick="authAction('reg')">РЕЄСТРАЦІЯ</button>
+        <button class="btn" onclick="authAction('reg')" style="border-color: var(--neon)">РЕЄСТРАЦІЯ</button>
     </div>
 
     <div id="menu-screen" class="screen">
@@ -74,7 +66,7 @@
             <button class="btn" onclick="startBot(20, 'Шоня')">Шоня</button>
         </div>
         <button class="btn" onclick="showLB()">🏆 ЛІДЕРИ</button>
-        <button class="btn" onclick="showScreen('profile-screen')">👤 ПРОФІЛЬ / АРХІВ</button>
+        <button class="btn" onclick="showScreen('profile-screen')">👤 ПРОФІЛЬ</button>
     </div>
 
     <div id="game-screen" class="screen">
@@ -96,8 +88,8 @@
         <h3>Налаштування</h3>
         <input type="text" id="new-nick" placeholder="Новий нік">
         <button class="btn" onclick="updateNick()">ЗМІНИТИ НІК</button>
-        <div id="archive-list" class="list-box" style="margin-top:10px;"></div>
         <button class="btn" onclick="showScreen('menu-screen')" style="margin-top:10px;">НАЗАД</button>
+        <button class="btn" onclick="auth.signOut()" style="margin-top:20px; color:#ff4444">ВИЙТИ З АКАУНТУ</button>
     </div>
 
     <script>
@@ -112,33 +104,63 @@
 
         let game = new Chess(), board = null, userData = {}, myColor = 'w', roomId = null, isPvP = false, gameActive = false, mySec, oppSec, timerInterval = null, pendingMove = null;
 
-        function authAction(t) {
-            const e = $('#email').val(), p = $('#pass').val();
-            if(t==='reg') {
-                auth.createUserWithEmailAndPassword(e,p).then(u => {
-                    db.ref('users/'+u.user.uid).set({nick: e.split('@')[0], rPvP: 100, rBot: 100, lastNickChange: 0});
-                }).catch(err => alert(err.message));
-            } else auth.signInWithEmailAndPassword(e,p).catch(err => alert(err.message));
+        // ЛОГІКА ВХОДУ / РЕЄСТРАЦІЇ
+        function authAction(type) {
+            const email = $('#email').val();
+            const pass = $('#pass').val();
+            if(!email || !pass) return alert("Заповніть поля!");
+
+            if(type === 'reg') {
+                auth.createUserWithEmailAndPassword(email, pass)
+                    .then(u => {
+                        db.ref('users/' + u.user.uid).set({
+                            nick: email.split('@')[0],
+                            rPvP: 100,
+                            rBot: 100
+                        });
+                        alert("Акаунт створено!");
+                    })
+                    .catch(e => alert("Помилка: " + e.message));
+            } else {
+                auth.signInWithEmailAndPassword(email, pass)
+                    .catch(e => alert("Помилка: " + e.message));
+            }
         }
 
+        // ПЕРЕВІРКА СТАНУ АВТОРИЗАЦІЇ
         auth.onAuthStateChanged(user => {
-            if(user) {
-                db.ref('users/'+user.uid).on('value', s => {
+            if (user) {
+                // Користувач увійшов
+                db.ref('users/' + user.uid).on('value', s => {
                     userData = s.val() || {};
-                    $('#u-name, #my-nick').text(userData.nick);
-                    $('#r-pvp').text(userData.rPvP); $('#r-bot').text(userData.rBot);
-                    showScreen('menu-screen'); loadHistory();
+                    $('#u-name, #my-nick').text(userData.nick || "Гравець");
+                    $('#r-pvp').text(userData.rPvP || 100);
+                    $('#r-bot').text(userData.rBot || 100);
+                    showScreen('menu-screen');
                 });
-            } else showScreen('auth-screen');
+            } else {
+                // Користувач не увійшов
+                showScreen('auth-screen');
+            }
         });
+
+        function showScreen(id) {
+            $('.screen').removeClass('active');
+            $('#' + id).addClass('active');
+        }
+
+        // --- РЕШТА ТВОЄЇ ЛОГІКИ ГРИ (PvP, Бот, Дошка) ---
 
         function startSearch() {
             isPvP = true; gameActive = false; showScreen('game-screen'); setButtons(false);
-            db.ref('queue').transaction(q => (q === auth.currentUser.uid) ? q : (q ? null : auth.currentUser.uid), (err, comm, s) => {
+            const tLim = $('#time-limit').val();
+            const qPath = 'queue_' + tLim;
+
+            db.ref(qPath).transaction(q => (q === auth.currentUser.uid) ? q : (q ? null : auth.currentUser.uid), (err, comm, s) => {
                 let res = s.val();
                 if (res === auth.currentUser.uid) {
                     roomId = auth.currentUser.uid; myColor = 'w';
-                    db.ref('rooms/'+roomId).set({p1:auth.currentUser.uid, p1N:userData.nick, p1R:userData.rPvP, fen:'start', status:'wait', time:$('#time-limit').val()});
+                    db.ref('rooms/'+roomId).set({p1:auth.currentUser.uid, p1N:userData.nick, p1R:userData.rPvP, fen:'start', status:'wait', time:tLim});
                     db.ref('rooms/'+roomId).onDisconnect().remove();
                 } else {
                     roomId = res; myColor = 'b';
@@ -154,82 +176,60 @@
                 pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
                 onDrop: (s, t) => {
                     if(!gameActive || game.turn() !== myColor[0]) return 'snapback';
-                    
-                    let testMove = game.move({from: s, to: t, promotion: 'q'});
-                    if (testMove === null) return 'snapback';
+                    let test = game.move({from: s, to: t, promotion: 'q'});
+                    if (!test) return 'snapback';
                     game.undo();
-
-                    let piece = game.get(s);
-                    if (piece && piece.type === 'p' && ((piece.color === 'w' && t[1] === '8') || (piece.color === 'b' && t[1] === '1'))) {
-                        pendingMove = { from: s, to: t };
-                        $('#promotion-menu').css('display', 'block');
-                        return;
+                    let p = game.get(s);
+                    if (p && p.type === 'p' && ((p.color === 'w' && t[1] === '8') || (p.color === 'b' && t[1] === '1'))) {
+                        pendingMove = { from: s, to: t }; $('#promotion-menu').show(); return;
                     }
-
-                    game.move({from: s, to: t, promotion: 'q'});
-                    updateAfterMove();
+                    game.move({from: s, to: t, promotion: 'q'}); updateAfterMove();
                 }
             });
-            if(isPvP) db.ref('rooms/'+roomId).on('value', s => {
-                let d = s.val(); if(!d) return;
-                if(d.status === 'play' && !gameActive) { gameActive = true; setButtons(true); mySec = d.time; oppSec = d.time; startT(); }
-                if(d.status === 'resigned') handleEnd(false, d.winner !== auth.currentUser.uid ? false : true, "Суперник здався");
-                if(myColor==='w' && d.p2N) $('#opp-nick').text(d.p2N);
-                if(myColor==='b') $('#opp-nick').text(d.p1N);
-                if(d.fen !== game.fen()) { game.load(d.fen); board.position(d.fen); if(game.game_over()) handleEnd(); }
-            });
-        }
 
-        function promoteTo(pieceType) {
-            $('#promotion-menu').hide();
-            if (pendingMove) {
-                game.move({ from: pendingMove.from, to: pendingMove.to, promotion: pieceType });
-                pendingMove = null;
-                updateAfterMove();
+            if(isPvP) {
+                db.ref('rooms/'+roomId).on('value', s => {
+                    let d = s.val(); if(!d) return;
+                    if(d.status === 'finish') { db.ref('rooms/'+roomId).off(); alert(d.msg); location.reload(); return; }
+                    if(d.status === 'play' && !gameActive) { gameActive = true; setButtons(true); mySec = d.time; oppSec = d.time; startT(); }
+                    if(d.status === 'resigned') handleEnd(false, d.winner !== auth.currentUser.uid ? false : true, "СУПЕРНИК ЗДАВСЯ");
+                    if(myColor==='w' && d.p2N) $('#opp-nick').text(d.p2N);
+                    if(myColor==='b') $('#opp-nick').text(d.p1N);
+                    if(d.fen !== game.fen()) { game.load(d.fen); board.position(d.fen); if(game.game_over()) handleEnd(); }
+                });
             }
         }
 
+        function promoteTo(type) { $('#promotion-menu').hide(); if (pendingMove) { game.move({ from: pendingMove.from, to: pendingMove.to, promotion: type }); pendingMove = null; updateAfterMove(); } }
         function updateAfterMove() {
             board.position(game.fen());
             if(isPvP) db.ref('rooms/'+roomId).update({fen: game.fen()});
             else { if(game.game_over()) handleEnd(); else setTimeout(makeBotMove, 500); }
         }
-
-        function setButtons(active) {
-            $('#game-controls').html(active ? `<button class="btn" onclick="resign()" style="color:#ff4444">🏳️ Здатися</button>` : `<button class="btn" onclick="location.reload()">🔙 Скасувати</button>`);
-        }
-
+        function setButtons(active) { $('#game-controls').html(active ? `<button class="btn" onclick="resign()" style="color:#ff4444">🏳️ Здатися</button>` : `<button class="btn" onclick="location.reload()">🔙 Скасувати</button>`); }
         function resign() { if(confirm("Здатися?")) db.ref('rooms/'+roomId).update({status:'resigned', winner: (myColor==='w' ? 'p2' : 'p1')}); }
-
         function handleEnd(draw = false, forceWin = null, reason = "") {
             clearInterval(timerInterval);
+            if (!gameActive && isPvP) return;
+            gameActive = false;
             let isWin = forceWin !== null ? forceWin : (game.in_checkmate() && game.turn() !== myColor[0]);
             let txt = reason || (isWin ? "МАТ! ПЕРЕМОГА" : (game.in_draw() ? "НІЧИЯ" : "ПОРАЗКА"));
             db.ref('users/'+auth.currentUser.uid).update({ [isPvP?'rPvP':'rBot']: Math.max(0, (userData[isPvP?'rPvP':'rBot']||100) + (isWin?5:-6)) });
-            alert(txt);
-            location.reload();
+            if(isPvP) db.ref('rooms/'+roomId).update({ status: 'finish', msg: txt }).then(() => { alert(txt); location.reload(); });
+            else { alert(txt); location.reload(); }
         }
-
         function startT() {
-            if(timerInterval) clearInterval(timerInterval);
+            if (timerInterval) clearInterval(timerInterval);
             timerInterval = setInterval(() => {
                 if(game.turn() === myColor[0]) { mySec--; if(mySec<=0) handleEnd(false, false, "Час вичерпано!"); }
                 else { oppSec--; if(oppSec<=0) handleEnd(false, true, "Час суперника вийшов!"); }
                 $('#my-time').text(fmt(mySec)); $('#opp-time').text(fmt(oppSec));
             }, 1000);
         }
-
         function fmt(s) { return Math.floor(s/60).toString().padStart(2,'0')+":"+(s%60).toString().padStart(2,'0'); }
-        function showScreen(id) { $('.screen').removeClass('active'); $('#'+id).addClass('active'); }
-        function showLB() { db.ref('users').once('value', s => { 
-            let u = Object.values(s.val() || {}); 
-            let pvp = u.sort((a,b)=>b.rPvP-a.rPvP).slice(0,5).map(x=>x.nick+': '+x.rPvP).join('\n');
-            let bots = u.sort((a,b)=>b.rBot-a.rBot).slice(0,5).map(x=>x.nick+': '+x.rBot).join('\n');
-            alert("TOP PvP:\n"+pvp+"\n\nTOP BOT:\n"+bots); 
-        }); }
+        function showLB() { db.ref('users').once('value', s => { let u = Object.values(s.val() || {}); alert("TOP PvP:\n"+u.sort((a,b)=>b.rPvP-a.rPvP).slice(0,5).map(x=>x.nick+': '+x.rPvP).join('\n')); }); }
         function startBot(l, n) { isPvP = false; gameActive = true; showScreen('game-screen'); $('#opp-nick').text(n); initBoard(); setButtons(true); }
         function makeBotMove() { let m = game.moves(); if(m.length) { game.move(m[Math.floor(Math.random()*m.length)]); board.position(game.fen()); if(game.game_over()) handleEnd(); } }
-        function loadHistory() { db.ref('users/'+auth.currentUser.uid+'/archive').limitToLast(5).once('value', s => { let h = ""; s.forEach(x => { let v = x.val(); h += `<div style="font-size:12px; padding:5px; border-bottom:1px solid #222">${v.opp} - ${v.res}</div>`; }); $('#archive-list').html(h || "Архів порожній"); }); }
         function updateNick() { let n = $('#new-nick').val(); if(n.length>2) db.ref('users/'+auth.currentUser.uid).update({nick:n}); }
         function friendRoom(m) { isPvP = true; showScreen('game-screen'); if(m==='create') { roomId=Math.floor(1000+Math.random()*9000); myColor='w'; db.ref('rooms/'+roomId).set({p1:auth.currentUser.uid, p1N:userData.nick, p1R:userData.rPvP, fen:'start', status:'wait', time:$('#time-limit').val()}); alert("КОД: "+roomId); } else { roomId=$('#join-id').val(); myColor='b'; db.ref('rooms/'+roomId).update({p2:auth.currentUser.uid, p2N:userData.nick, p2R:userData.rPvP, status:'play'}); } initBoard(); }
     </script>
