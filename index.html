@@ -3,53 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Planet_Chess | Mobile Fix</title>
+    <title>Planet_Chess | Mobile Fortress</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-database-compat.js"></script>
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    
     <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui-touch-punch/0.2.3/jquery.ui.touch-punch.min.js"></script>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
 
     <style>
         :root { --accent: #00d4ff; --neon: #39ff14; --bg: #0b0b14; }
-        body { 
-            background: var(--bg); color: white; font-family: sans-serif; margin: 0; 
-            -webkit-tap-highlight-color: transparent; /* Видаляє синій спалах при натисканні на тел */
-        }
-        .screen { display: none; width: 100%; max-width: 500px; padding: 20px; margin: auto; flex-direction: column; min-height: 100vh; box-sizing: border-box; }
+        body { background: var(--bg); color: white; font-family: sans-serif; margin: 0; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
+        .screen { display: none; width: 100%; max-width: 500px; padding: 15px; margin: auto; flex-direction: column; min-height: 100vh; box-sizing: border-box; }
         .active { display: flex !important; }
+        
+        /* Дошка */
         #board { width: 100%; margin: 10px auto; border: 3px solid var(--accent); border-radius: 8px; touch-action: none; }
         
-        /* Покращені інпути для телефонів */
-        input, select { 
-            width: 100%; padding: 15px; margin: 8px 0; border-radius: 12px; 
-            background: #111; color: #fff; border: 1px solid #444; font-size: 16px; 
-            box-sizing: border-box;
-        }
-        input:focus { border-color: var(--accent); outline: none; }
-        
-        .btn { 
-            background: rgba(255,255,255,0.05); border: 1px solid var(--accent); 
-            color: white; padding: 16px; margin: 6px 0; border-radius: 14px; 
-            cursor: pointer; font-weight: bold; width: 100%; font-size: 16px;
-            transition: 0.2s;
-        }
+        /* Кнопки та інпути */
+        .btn { background: rgba(255,255,255,0.05); border: 1px solid var(--accent); color: white; padding: 16px; margin: 6px 0; border-radius: 14px; cursor: pointer; font-weight: bold; width: 100%; font-size: 16px; transition: 0.2s; }
         .btn:active { background: var(--accent); color: black; transform: scale(0.98); }
+        input, select { width: 100%; padding: 15px; margin: 8px 0; border-radius: 12px; background: #111; color: #fff; border: 1px solid #444; font-size: 16px; box-sizing: border-box; }
         
+        /* Інтерфейс гри */
         .timer-box { display: flex; justify-content: space-between; padding: 12px; background: #161625; border-radius: 10px; color: var(--neon); font-family: monospace; font-size: 22px; margin-bottom: 5px; border: 1px solid #333; }
         .stats-box { background: rgba(255,255,255,0.08); padding: 15px; border-radius: 15px; border-left: 5px solid var(--neon); text-align: left; margin-bottom: 15px; }
-        .archive-list { background: #161625; border-radius: 10px; padding: 10px; max-height: 150px; overflow-y: auto; text-align: left; font-size: 13px; border: 1px solid #333; }
         .bot-tab { display: none; background: #000; padding: 10px; border-radius: 12px; border: 1px dashed var(--accent); margin-top: 5px; }
-        
-        #promotion-dialog { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #161625; padding: 25px; border: 3px solid var(--accent); border-radius: 20px; z-index: 1000; text-align: center; box-shadow: 0 0 30px #000; }
+        .archive-list { background: #161625; border-radius: 10px; padding: 10px; max-height: 150px; overflow-y: auto; text-align: left; font-size: 13px; border: 1px solid #333; }
+
+        /* Перетворення пішака */
+        #promotion-dialog { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #161625; padding: 25px; border: 3px solid var(--accent); border-radius: 20px; z-index: 1000; text-align: center; box-shadow: 0 0 50px #000; }
         #promotion-dialog button { width: 70px; height: 70px; font-size: 35px; margin: 5px; cursor: pointer; background: #000; color: white; border: 1px solid #444; border-radius: 15px; }
+        
+        #auth-error { color: #ff4444; font-size: 13px; margin-top: 10px; text-align: center; min-height: 20px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -64,29 +54,31 @@
 
     <div id="auth-screen" class="screen active">
         <h1 style="color:var(--accent); text-align:center; margin-top:40px;">Planet_Chess</h1>
-        <p style="text-align:center; opacity:0.7;">Введіть дані для входу або реєстрації</p>
-        <input type="email" id="email" placeholder="Email" autocomplete="email">
-        <input type="password" id="pass" placeholder="Пароль">
-        <button class="btn" onclick="authAction('login')">УВІЙТИ</button>
-        <button class="btn" onclick="authAction('reg')" style="border-color:var(--neon); background: rgba(57, 255, 20, 0.05);">СТВОРИТИ АКАУНТ</button>
+        <p style="text-align:center; opacity:0.7;">Акаунт-фортеця: вхід або реєстрація</p>
+        <input type="email" id="email" placeholder="Email (напр. user@mail.com)" autocomplete="email">
+        <input type="password" id="pass" placeholder="Пароль (від 6 символів)">
+        
+        <button class="btn" onclick="authAction('login')" style="background: var(--accent); color: black;">УВІЙТИ</button>
+        <button class="btn" onclick="authAction('reg')" style="border-color:var(--neon)">РЕЄСТРАЦІЯ</button>
+        
+        <div id="auth-error"></div>
     </div>
 
     <div id="menu-screen" class="screen">
         <div class="stats-box">
             <b id="u-name" style="font-size:20px;">...</b><br>
-            <div style="margin-top:8px;">🌐 PvP: <b id="r-pvp" style="color:var(--accent)">100</b> | 🤖 Бот: <b id="r-bot" style="color:var(--neon)">100</b></div>
+            <div style="margin-top:8px;">🌐 PvP: <b id="r-pvp">100</b> | 🤖 Бот: <b id="r-bot">100</b></div>
         </div>
         
-        <label style="font-size:14px; margin-left:5px;">Вибір часу:</label>
+        <label style="font-size:14px; margin-left:5px;">Час гри:</label>
         <select id="time-select">
-            <option value="60">1 хвилина (Куля)</option>
-            <option value="180" selected>3 хвилини (Бліц)</option>
-            <option value="600">10 хвилин (Рапід)</option>
+            <option value="60">1 хвилина</option>
+            <option value="180" selected>3 хвилини</option>
+            <option value="600">10 хвилин</option>
         </select>
 
-        <button class="btn" onclick="startSearch()">🌐 ШВИДКА ГРА (PvP)</button>
+        <button class="btn" onclick="startSearch()">🌐 ГРАТИ (PvP)</button>
         <button class="btn" onclick="$('.friend-box').toggle()">🤝 ГРА З ДРУГОМ</button>
-        
         <div class="friend-box" style="display:none; background: #111; padding: 12px; border-radius: 12px; margin-bottom:10px;">
             <button class="btn" onclick="friendRoom('create')">Створити код</button>
             <input type="number" id="join-id" placeholder="Введіть код">
@@ -101,30 +93,27 @@
         </div>
 
         <button class="btn" onclick="showLB()">🏆 ЛІДЕРБОРД</button>
-        <button class="btn" onclick="showScreen('profile-screen')">👤 МІЙ ПРОФІЛЬ</button>
+        <button class="btn" onclick="showScreen('profile-screen')">👤 ПРОФІЛЬ</button>
     </div>
 
     <div id="game-screen" class="screen">
         <div class="timer-box"><span id="opp-nick">Суперник</span><span id="opp-time">--:--</span></div>
         <div id="board"></div>
         <div class="timer-box" style="margin-top:10px; border-color:var(--accent);"><span id="my-nick">Ви</span><span id="my-time">--:--</span></div>
-        <div id="room-info" style="text-align:center; font-weight:bold; color:var(--accent); min-height:24px; margin-bottom:10px;"></div>
+        <div id="room-info" style="text-align:center; font-weight:bold; color:var(--accent); min-height:24px;"></div>
         <div id="game-controls"></div>
     </div>
 
     <div id="profile-screen" class="screen">
         <h3>👤 Налаштування</h3>
-        <input type="text" id="new-nick" placeholder="Новий нікнейм">
-        <button class="btn" onclick="updateNick()">ОНОВИТИ НІК</button>
-        
-        <h4 style="margin-top:25px;">📜 Ваші ігри:</h4>
-        <div id="archive-list" class="archive-list">Історія порожня</div>
-        
-        <button class="btn" onclick="showScreen('menu-screen')" style="margin-top:30px; border-color:#666;">🔙 НАЗАД</button>
+        <input type="text" id="new-nick" placeholder="Новий нік">
+        <button class="btn" onclick="updateNick()">ЗМІНИТИ НІК</button>
+        <h4 style="margin-top:20px;">📜 Історія:</h4>
+        <div id="archive-list" class="archive-list">Порожньо</div>
+        <button class="btn" onclick="showScreen('menu-screen')" style="margin-top:20px;">🔙 НАЗАД</button>
     </div>
 
     <script>
-        // Твій Firebase (без змін)
         const firebaseConfig = { 
             apiKey: "AIzaSyAmkBLeoloxgLRGzClkQ21HQ2GEahFQxKM",
             databaseURL: "https://hrrthrth-default-rtdb.firebaseio.com",
@@ -137,7 +126,7 @@
         let game = new Chess(), board = null, userData = {}, pendingMove = null;
         let myColor = 'w', roomId = null, isPvP = false, gameActive = false, mySec, oppSec, timerInterval = null, botLevel = 0;
 
-        function showScreen(id) { $('.screen').removeClass('active'); $('#'+id).addClass('active'); window.scrollTo(0,0); }
+        function showScreen(id) { $('.screen').removeClass('active'); $('#'+id).addClass('active'); }
 
         auth.onAuthStateChanged(user => {
             if(user) {
@@ -147,41 +136,44 @@
                     $('#r-pvp').text(userData.rPvP || 100); $('#r-bot').text(userData.rBot || 100);
                     renderArchive(); showScreen('menu-screen');
                 });
-            } else {
-                showScreen('auth-screen');
-            }
+            } else showScreen('auth-screen');
         });
 
         function authAction(t) {
-            const e = $('#email').val().trim(), p = $('#pass').val().trim();
-            if(!e || !p) return alert("Введіть пошту та пароль!");
-            if(t==='reg') {
-                auth.createUserWithEmailAndPassword(e,p).then(u => {
-                    db.ref('users/'+u.user.uid).set({nick:e.split('@')[0], rPvP:100, rBot:100, lastNickChange:0});
-                }).catch(err => alert("Помилка реєстрації: " + err.message));
+            const errDiv = $('#auth-error');
+            const e = $('#email').val().trim().toLowerCase();
+            const p = $('#pass').val().trim();
+
+            if (!e || !p) return errDiv.text("Заповніть всі поля!");
+            if (p.length < 6) return errDiv.text("Пароль від 6 символів!");
+            
+            errDiv.text("Завантаження...");
+
+            if (t === 'reg') {
+                auth.createUserWithEmailAndPassword(e, p).then(u => {
+                    db.ref('users/' + u.user.uid).set({nick: e.split('@')[0], rPvP: 100, rBot: 100, lastNickChange: 0});
+                }).catch(err => errDiv.text("Помилка реєстрації: " + err.message));
             } else {
-                auth.signInWithEmailAndPassword(e,p).catch(err => alert("Помилка входу: " + err.message));
+                auth.signInWithEmailAndPassword(e, p).catch(err => errDiv.text("Помилка входу: " + err.message));
             }
         }
 
         function updateNick() {
             let n = $('#new-nick').val().trim(); let now = Date.now();
-            if(n.length < 3) return alert("Нік занадто короткий!");
-            if(userData.lastNickChange && (now - userData.lastNickChange < 2592000000)) return alert("Міняти нік можна раз на 30 днів!");
+            if(n.length < 3) return alert("Занадто короткий!");
+            if(userData.lastNickChange && (now - userData.lastNickChange < 2592000000)) return alert("Раз на 30 днів!");
             db.ref('users/'+auth.currentUser.uid).update({nick: n, lastNickChange: now});
-            alert("Нік змінено!");
         }
 
         function startSearch() {
             isPvP = true; gameActive = false; showScreen('game-screen');
             let t = $('#time-select').val();
-            $('#room-info').text("🔍 Пошук суперника...");
+            $('#room-info').text("🔍 Пошук...");
             $('#game-controls').html(`<button class="btn" onclick="cancelSearch()">❌ СКАСУВАТИ</button>`);
             db.ref('queue').transaction(q => (q && q !== auth.currentUser.uid) ? null : auth.currentUser.uid, (err, comm, s) => {
                 if(s.val() === auth.currentUser.uid) {
                     roomId = auth.currentUser.uid; myColor = 'w';
                     db.ref('rooms/'+roomId).set({p1:auth.currentUser.uid, p1N:userData.nick, status:'wait', fen:'start', time: t});
-                    db.ref('rooms/'+roomId).onDisconnect().remove();
                 } else {
                     roomId = s.val(); myColor = 'b';
                     db.ref('rooms/'+roomId).update({p2:auth.currentUser.uid, p2N:userData.nick, status:'play'});
@@ -201,7 +193,7 @@
             if(mode === 'create') {
                 roomId = Math.floor(1000 + Math.random()*9000).toString(); myColor = 'w';
                 db.ref('rooms/'+roomId).set({p1:auth.currentUser.uid, p1N:userData.nick, status:'wait', fen:'start', time:$('#time-select').val()});
-                $('#room-info').text("Код для друга: " + roomId);
+                $('#room-info').text("Код: " + roomId);
                 $('#game-controls').html(`<button class="btn" onclick="cancelSearch()">❌ ЗАКРИТИ</button>`);
             } else {
                 roomId = $('#join-id').val(); myColor = 'b';
@@ -235,7 +227,7 @@
                 if(d.status==='play' && !gameActive) {
                     gameActive=true; mySec=d.time; oppSec=d.time; startT();
                     $('#opp-nick').text(myColor==='w'?d.p2N:d.p1N);
-                    $('#room-info').text("ГРА ПОЧАЛАСЯ!");
+                    $('#room-info').text("");
                     $('#game-controls').html(`<button class="btn" onclick="handleEnd(false,false)">🏳️ ЗДАТИСЯ (-6)</button>`);
                 }
                 if(d.fen !== game.fen()) { game.load(d.fen); board.position(d.fen); if(game.game_over()) handleEnd(); }
